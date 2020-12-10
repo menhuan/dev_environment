@@ -1,0 +1,47 @@
+ARG BASE_IMAGE
+FROM docker.infervision.com/library/python:${BASE_IMAGE}
+WORKDIR /app
+
+# Update apt-get source
+RUN sed -i s@/archive.debian.org/@/mirrors.huaweicloud.com/@g /etc/apt/sources.list  && \
+    sed -i s@/security.debian.org/@/mirrors.huaweicloud.com/@g /etc/apt/sources.list && \
+    sed -i s@/deb.debian.org/@/mirrors.huaweicloud.com/@g /etc/apt/sources.list
+
+RUN apt-get update && apt-get install -y cron gcc procps libx11-6 libgl1-mesa-glx git \
+    vim \
+    curl \
+    sudo \
+    zsh \
+    && apt-get clean
+
+RUN touch /etc/pip.conf \
+   && echo "[global]" > /etc/pip.conf \
+   && echo "index-url = https://repos.infervision.com/repository/pypi/simple" >> /etc/pip.conf \
+   && pip install --upgrade pip \
+   && pip install poetry
+
+ENV PATH="/root/.poetry/bin:$PATH"
+
+RUN addgroup --gid 1000 docker && \
+    adduser --uid 1000 --ingroup docker --home /home/docker --shell /bin/sh  docker && \
+    adduser docker sudo && \
+    echo 'docker:111111' | chpasswd
+# 安装配置fixuid
+COPY fixuid-0.5-linux-amd64.tar.gz .
+
+RUN USER=docker&& \
+    GROUP=docker && \
+    tar -C /usr/local/bin -xzf fixuid-0.5-linux-amd64.tar.gz  && \
+    chown root:root /usr/local/bin/fixuid && \
+    chmod 4755 /usr/local/bin/fixuid && \
+    mkdir -p /etc/fixuid && \
+    printf "user: $USER\ngroup: $GROUP\n" > /etc/fixuid/config.yml
+
+ENV TZ=Asia/Shanghai
+ENV PYTHONPATH=/app
+USER docker:docker
+
+ENTRYPOINT ["fixuid"]
+CMD ["bash"]
+ENV HOME /home/docker
+USER docker:docker
